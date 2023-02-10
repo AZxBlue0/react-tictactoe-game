@@ -36,30 +36,12 @@ export const Board = () => {
         return () => { newSocket.disconnect() };
     }, [])
 
-    const togglePlayer = () => {
-        if (playerTurn === 'X') {
-            setPlayerTrun('O');
-        } else {
-            setPlayerTrun('X');
-        }
-    }
-
     useEffect(() => {
         console.log(playerXMoves, playerOMoves)
     }, [playerOMoves, playerXMoves]);
 
     const handleTurn = (x, y) => {
-        if (playerTurn === 'X') {
-            const newMoves = [...playerXMoves];
-            newMoves[x][y] = 1;
-            setPlayerXMoves(newMoves);
-        } else {
-            const newMoves = [...playerOMoves];
-            newMoves[x][y] = 1;
-            setPlayerOMoves(newMoves);
-        }
-
-        togglePlayer();
+        socket.emit('new move', x, y);
     }
 
     if (playerIsWaiting) {
