@@ -3,7 +3,7 @@ import { Server } from 'socket.io';
 import path from 'path'
 import { fileURLToPath } from 'url';
 import express from 'express'
-import { v4 as UUID } from UUID
+import { v4 as UUID } from 'uuid'
 
 let expressApp = express();
 
@@ -26,25 +26,41 @@ let io = new Server(server, {
 
 let gamesInProgress = {};
 
-const createNewGame = () => {
+const createNewGame = (shouldCreateGame) => {
     return {
         id: UUID(),
         playerXMoves: [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
         playerOMoves: [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
         playerXSocket: null,
         playerOSocket: null,
-        currentPlayer: 'X'
+        currentPlayer: 'X',
+        isAutoJoin: !shouldCreateGame,
     }
 }
 
 io.on('connection', (socket) => {
-    const gameWithOnePlayer = Object.values(gamesInProgress).find(
-        game => game.playerXSocket && !game.playerOSocket
-    )
-    let game;
+    let { shouldCreateGame, gameId } = socket.handshake.query;
+    shouldCreateGame === '' ? shouldCreateGame = false : shouldCreateGame = true;
 
-    if (gameWithOnePlayer) {
-        game = gameWithOnePlayer;
+    console.log(gamesInProgress[gameId]);
+    let existingGame;
+
+    if (gameId !== '') {
+        existingGame = gamesInProgress[gameId];
+    } else {
+        existingGame = Object.values(gamesInProgress).find(
+            game => !game.playerOSocket && game.isAutoJoin
+        )
+    }
+
+    let game;
+    console.log(shouldCreateGame);
+    console.log(existingGame !== undefined);
+
+    console.log(existingGame !== undefined && !shouldCreateGame);
+
+    if (existingGame !== undefined && !shouldCreateGame) {
+        game = existingGame;
         game.playerOSocket = socket;
         game.playerOSocket.emit('start');
         game.playerXSocket.emit('start');
@@ -61,22 +77,26 @@ io.on('connection', (socket) => {
                 game.playerXSocket.disconnect();
                 game.playerXSocket = undefined;
             }
-            delete gamesInProgress[newGame.id];
+            delete gamesInProgress[game.id];
         });
     } else {
-        const newGame = createNewGame();
+        const newGame = createNewGame(!shouldCreateGame);
+        if (shouldCreateGame) {
+            socket.emit('gameId', newGame.id);
+        }
+        gamesInProgress[newGame.id] = newGame;
         newGame.playerXSocket = socket;
         console.log(`Player X has joined a game with id: ${newGame.id}`)
 
         socket.on('disconnect', () => {
-            newGame.playerXSocket = undefined;
-            if (newGame.playerOSocket) {
-                newGame.playerOSocket.emit('info', ' Player X dippped');
-                newGame.playerOSocket.disconnect();
-                newGame.playerOSocket = undefined;
+            game.playerXSocket = undefined;
+            if (game.playerOSocket) {
+                game.playerOSocket.emit('info', ' Player X dippped');
+                game.playerOSocket.disconnect();
+                game.playerOSocket = undefined;
             }
 
-            delete gamesInProgress[newGame.id];
+            delete gamesInProgress[game.id];
         });
 
         game = newGame;
